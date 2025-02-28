@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     try {
         time=Solve(n,totalThreads,A,inv,columnOrder,undo);
         std::cout << "Inverse matrix:\n";
-        printMatrix(inv,m);
+        printMatrix(A,m);
     }
     catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << "\n";
@@ -63,9 +63,9 @@ int main(int argc, char* argv[]) {
 
 
     if(k==0){
-        readMatrixFromFile(filename, A, n);
+        readMatrixFromFile(filename, inv, n);
     }else{
-        initializeMatrix(A, k, n);
+        initializeMatrix(inv, k, n);
     }
     double normError = 0.0;
     normError=getNorm(A,inv);

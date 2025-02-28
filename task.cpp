@@ -170,7 +170,6 @@ void* SolveProcess(void *threadArg)
             for (int j=0;j<n;j++)
                 (data->A)[i][j]=(data->inv)[undo[i]][j];
         }
-        (data->inv) = (data->A);
     }
     return 0;
 }
