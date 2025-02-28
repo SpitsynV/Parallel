@@ -176,8 +176,8 @@ void* SolveProcess(void *threadArg)
 }
 
 //Возвращаем время если удалось решить и число<0 если не удалось
-double Solve(int n,int totalThreads,std::vector<std::vector<double>> &A,
-             std::vector<std::vector<double>> &inv){
+double Solve(int n,int totalThreads,std::vector<std::vector<double>>& A,
+    std::vector<std::vector<double>>& inv,std::vector<int> &columnOrder, std::vector<int> &undo){
 
     pthread_t threadPool[totalThreads];//массив указателей на потоки
     std::vector<threadData>Data;//массив данных для потоков
@@ -187,7 +187,7 @@ double Solve(int n,int totalThreads,std::vector<std::vector<double>> &A,
         inv[i][i] = 1.0;
 
     // Initialize shared data
-    std::vector<int> columnOrder(n);
+    
     for (int i = 0; i < n; ++i)
         columnOrder[i] = i;
     //Intialize shared memory

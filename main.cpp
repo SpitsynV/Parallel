@@ -26,6 +26,8 @@ int main(int argc, char* argv[]) {
     int err = 0;
     std::vector<std::vector<double>> A;
     std::vector<std::vector<double>> inv;
+    std::vector<int> columnOrder(n);
+    std::vector<int> undo(n);
     A.resize(n, std::vector<double>(n));
     inv.resize(n, std::vector<double>(n));
     if (k == 0) {
@@ -46,7 +48,7 @@ int main(int argc, char* argv[]) {
 
     double time=-1;
     try {
-        time=Solve(n,totalThreads,A,inv);
+        time=Solve(n,totalThreads,A,inv,columnOrder,undo);
         std::cout << "Inverse matrix:\n";
         printMatrix(inv,m);
     }
