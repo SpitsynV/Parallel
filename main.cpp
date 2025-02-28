@@ -1,4 +1,3 @@
-//основная программа решает систему а не обращает матрицу!!  :(
 #include <iostream>
 #include <chrono>
 #include "matrix.h"

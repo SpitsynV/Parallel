@@ -10,12 +10,14 @@ struct threadData {
     int n;
     int myID;
     int p;//total threads
-    std::vector<std::vector<double>> *A;
-    std::vector<std::vector<double>> *inv;
-    std::vector<int> *columnOrder;
+    std::vector<std::vector<double>> &A;
+    std::vector<std::vector<double>> &inv;
+    std::vector<int> &columnOrder;
     double *globalMaxVal; // Pointer to globalMaxVal for ALL threads
     int *globalPivotRow;
     int *globalPivotCol;
+    threadData(int n_, int myID_, int p_,std::vector<std::vector<double>>& A_, std::vector<std::vector<double>>& inv_, std::vector<int>& columnOrder_, double* globalMaxVal_, int* globalPivotRow_, int* globalPivotCol_)
+    :n(n_), myID(myID_), p(p_), A(A_), inv(inv_),columnOrder(columnOrder_),globalMaxVal(globalMaxVal_),globalPivotRow(globalPivotRow_), globalPivotCol(globalPivotCol_) {}
 };
 
 void await(int totalThreads)
@@ -73,13 +75,16 @@ void* SolveProcess(void *threadArg)
     //--
     for (int step = 0; step < n; step++)
     {
-        if(myID==0){
-            pthread_mutex_lock(&mutex);
-            (*data->globalMaxVal) =((*data->A)[step][step]);
+        
+           
+            if((*data->globalPivotRow)<step &&(*data->globalPivotCol)<step){
+            (*data->globalMaxVal) =((data->A)[step][step]);
             (*data->globalPivotRow)=step;
             (*data->globalPivotCol)=step;
-            pthread_mutex_unlock(&mutex);
-        }
+            }
+            
+        
+        
         int localPivotRow=-1;
         int localPivotCol=-1;//тк неизвестно лежит ли в подматрице [(step,step) ...]
         //---pivot find loc---//
@@ -88,7 +93,7 @@ void* SolveProcess(void *threadArg)
         {
             for (int j = step; j < n; j++)
             {
-                double current = std::fabs((*data->A)[i][j]);
+                double current = std::fabs((data->A)[i][j]);
                 if (current > localMaxVal &&i>=step &&j>=step)
                 {
                     localMaxVal = current;
@@ -98,7 +103,7 @@ void* SolveProcess(void *threadArg)
                 }
             }
         }
-
+        
 
 
         pthread_mutex_lock(&mutex);
@@ -114,29 +119,29 @@ void* SolveProcess(void *threadArg)
         await(totalThreads);
         if(myID==0)
         {
-            if ((*data->globalMaxVal)< tol && (*data->globalMaxVal)>0 ){
+            if ((*data->globalMaxVal)< tol){
                 throw std::runtime_error("Matrix is close to singular.");
                 return nullptr;
             }
-            localPivotRow= (*data->globalPivotRow);
-            localPivotCol= (*data->globalPivotCol);
-            if (localPivotRow != step) {
-                std::swap((*data->A)[step], (*data->A)[localPivotRow]);
-                std::swap((*data->inv)[step], (*data->inv)[localPivotRow]);
+            if ((*data->globalPivotRow) != step) {
+                std::swap((data->A)[step], (data->A)[(*data->globalPivotRow)]);
+                std::swap((data->inv)[step], (data->inv)[(*data->globalPivotRow)]);
+                (*data->globalPivotRow) = step;
             }
-            if (localPivotCol != step) {
+            if ((*data->globalPivotCol) != step) {
                 for (int i = 0; i < n; ++i) {
-                    std::swap((*data->A)[i][step], (*data->A)[i][localPivotCol]);
+                    std::swap((data->A)[i][step], (data->A)[i][(*data->globalPivotCol)]);
                 }
-                std::swap((*data->columnOrder)[step], (*data->columnOrder)[localPivotCol]);
+                std::swap((data->columnOrder)[step], (data->columnOrder)[(*data->globalPivotCol)]);
+                (*data->globalPivotCol) = step;
             }
             //--Normalize--//
-            double pivotVal = (*data->A)[step][step]; //Доступ не в свою часть, но строго один
+            double pivotVal = (data->A)[step][step]; //Доступ не в свою часть, но строго один
             for (int j = step; j < n; ++j) {
-                (*data->A)[step][j] /= pivotVal;
+                (data->A)[step][j] /= pivotVal;
             }
             for (int j = 0; j < n; ++j) {
-                (*data->inv)[step][(*data->columnOrder)[j]] /= pivotVal;
+                (data->inv)[step][(data->columnOrder)[j]] /= pivotVal;
             }
         }
         await(totalThreads);
@@ -144,12 +149,12 @@ void* SolveProcess(void *threadArg)
         for (int i = first_row; i <= last_row; ++i) {
             if (i == step)
                 continue;
-            double factor = (*data->A)[i][step];
+            double factor = (data->A)[i][step];
             for (int j = step; j < n; ++j) {
-                (*data->A)[i][j] -= factor * (*data->A)[step][j];
+                (data->A)[i][j] -= factor * (data->A)[step][j];
             }
             for (int j = 0; j < n; ++j) {
-                (*data->inv)[i][(*data->columnOrder)[j]] -= factor * (*data->inv)[step][(*data->columnOrder)[j]];
+                (data->inv)[i][(data->columnOrder)[j]] -= factor * (data->inv)[step][(data->columnOrder)[j]];
             }
         }
 
@@ -159,13 +164,13 @@ void* SolveProcess(void *threadArg)
     if(myID==0){
         std::vector<double> undo(n);
         for(int q=0;q<n;q++){
-            undo[(*data->columnOrder)[q]]=q;
+            undo[(data->columnOrder)[q]]=q;
         }
         for (int i=0;i<n;i++) {
             for (int j=0;j<n;j++)
-                (*data->A)[i][j]=(*data->inv)[undo[i]][j];
+                (data->A)[i][j]=(data->inv)[undo[i]][j];
         }
-        (*data->inv) = (*data->A);
+        (data->inv) = (data->A);
     }
     return 0;
 }
@@ -175,7 +180,8 @@ double Solve(int n,int totalThreads,std::vector<std::vector<double>> &A,
              std::vector<std::vector<double>> &inv){
 
     pthread_t threadPool[totalThreads];//массив указателей на потоки
-    std::vector<threadData>Data(totalThreads);//массив данных для потоков
+    std::vector<threadData>Data;//массив данных для потоков
+    Data.reserve(totalThreads);
     inv.assign(n, std::vector<double>(n, 0.0));
     for (int i = 0; i < n; ++i)
         inv[i][i] = 1.0;
@@ -191,15 +197,7 @@ double Solve(int n,int totalThreads,std::vector<std::vector<double>> &A,
     //Create threads
     for (int i = 0; i < totalThreads; i++)
     {
-        Data[i].n = n;
-        Data[i].myID = i;
-        Data[i].p = totalThreads;
-        Data[i].A = &A;
-        Data[i].inv = &inv;
-        Data[i].columnOrder = &columnOrder;
-        Data[i].globalMaxVal=&ptr;
-        Data[i].globalPivotRow=&ptr1;
-        Data[i].globalPivotCol=&ptr2;
+        Data.emplace_back(n,i,totalThreads,A,inv,columnOrder,&ptr,&ptr1,&ptr2);
     }
 
     std::chrono::duration<double> elapsed;
