@@ -9,8 +9,8 @@
 
 
 int main(int argc, char* argv[]) {
-    if (argc < 5 || argc > 6) {
-        std::cerr << "Usage: " << argv[0] << " n m k p filename" << std::endl; //проверь формат
+    if (argc < 6 || argc > 7) {
+        std::cerr << "Usage: " << argv[0] << " n m k p version filename" << std::endl; //проверь формат
         return 1;
     }
 
@@ -18,6 +18,11 @@ int main(int argc, char* argv[]) {
     int m = std::stoi(argv[2]);   	// amount of output values
     int k = std::stoi(argv[3]);   	// formula number
     int totalThreads = std::stoi(argv[4]);
+    int v = std::stoi(argv[5]);
+    if(v!=0 && v!=1){
+        std::cerr << "Error:Invalid version(0 for row, 1 for  col)" << std::endl;
+        return 1;
+    }
     std::string filename="";
     if (m > n) {
         std::cerr << "Error:Number of values to be output is greater than the matrix dimension " << std::endl;
@@ -31,7 +36,7 @@ int main(int argc, char* argv[]) {
     A.resize(n, std::vector<double>(n));
     inv.resize(n, std::vector<double>(n));
     if (k == 0) {
-        filename = argv[5];
+        filename = argv[6];
         err = readMatrixFromFile(filename, A, n);
         if (!err) {
             std::cerr << "Error: Can't read from file " << filename << std::endl;
@@ -48,7 +53,7 @@ int main(int argc, char* argv[]) {
 
     double time=-1;
     try {
-        time=Solve(n,totalThreads,A,inv,columnOrder,undo);
+        time=Solve(n,totalThreads,A,inv,columnOrder,undo,v);
         std::cout << "Inverse matrix:\n";
         printMatrix(A,m);
     }

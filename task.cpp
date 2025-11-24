@@ -16,8 +16,9 @@ struct threadData {
     double *globalMaxVal; // Pointer to globalMaxVal for ALL threads
     int *globalPivotRow;
     int *globalPivotCol;
-    threadData(int n_, int myID_, int p_,std::vector<std::vector<double>>& A_, std::vector<std::vector<double>>& inv_, std::vector<int>& columnOrder_, double* globalMaxVal_, int* globalPivotRow_, int* globalPivotCol_)
-    :n(n_), myID(myID_), p(p_), A(A_), inv(inv_),columnOrder(columnOrder_),globalMaxVal(globalMaxVal_),globalPivotRow(globalPivotRow_), globalPivotCol(globalPivotCol_) {}
+    int v;//version of programm: 0->row subdivision, 1->col subdivison
+    threadData(int n_, int myID_, int p_,std::vector<std::vector<double>>& A_, std::vector<std::vector<double>>& inv_, std::vector<int>& columnOrder_, double* globalMaxVal_, int* globalPivotRow_, int* globalPivotCol_, int v_)
+    :n(n_), myID(myID_), p(p_), A(A_), inv(inv_),columnOrder(columnOrder_),globalMaxVal(globalMaxVal_),globalPivotRow(globalPivotRow_), globalPivotCol(globalPivotCol_), v(v_) {}
 };
 
 void await(int totalThreads)
@@ -65,7 +66,9 @@ void* SolveProcess(void *threadArg)
     int n=data->n;
     int myID=data->myID;
     int totalThreads=data->p;
-    static double tol=1e-16;
+    int v=data->v;
+    static double tol=1e-19;
+    if(v==0){
 
     int rows_per_thread =n/totalThreads;//распределяем
     int remainder = n % totalThreads;//как-то балансируем
@@ -87,7 +90,7 @@ void* SolveProcess(void *threadArg)
         
         int localPivotRow=-1;
         int localPivotCol=-1;//тк неизвестно лежит ли в подматрице [(step,step) ...]
-        //---pivot find loc---//
+        //pivot find loc//
         double localMaxVal = -1;
         for (int i = first_row; i <= last_row; i++)
         {
@@ -135,7 +138,7 @@ void* SolveProcess(void *threadArg)
                 std::swap((data->columnOrder)[step], (data->columnOrder)[(*data->globalPivotCol)]);
                 (*data->globalPivotCol) = step;
             }
-            //--Normalize--//
+            //Normalize//
             double pivotVal = (data->A)[step][step]; //Доступ не в свою часть, но строго один
             for (int j = step; j < n; ++j) {
                 (data->A)[step][j] /= pivotVal;
@@ -145,7 +148,7 @@ void* SolveProcess(void *threadArg)
             }
         }
         await(totalThreads);
-        //--Eliminate part--//
+        //Eliminate part//
         for (int i = first_row; i <= last_row; ++i) {
             if (i == step)
                 continue;
@@ -173,10 +176,173 @@ void* SolveProcess(void *threadArg)
     }
     return 0;
 }
+    if(v==1){//распределение по столбцам, сделать обнуление по строкам( распределение и максимум правильны? только eliminate  переписать)
+        int col_per_thread =n/totalThreads;//распределяем
+        int remainder = n % totalThreads;//как-то балансируем
+        int first_col = myID * col_per_thread + std::min(myID, remainder);
+        int last_col = first_col + col_per_thread - 1 + (myID < remainder ? 1 : 0);    
+        ////
+        ////std::cout<<myID<<" "<<first_col<<" "<<last_col<<std::endl;
+        ////
+        for (int step = 0; step < n; step++)
+    {
+        
+           
+            if((*data->globalPivotRow)<step &&(*data->globalPivotCol)<step){
+            (*data->globalMaxVal) =((data->A)[step][step]);
+            (*data->globalPivotRow)=step;
+            (*data->globalPivotCol)=step;
+            }
+            
+        
+        
+        int localPivotRow=-1;
+        int localPivotCol=-1;//тк неизвестно лежит ли в подматрице [(step,step) ...]
+        //pivot find loc//
+        double localMaxVal = -1;
+        for (int i = step; i <= n-1; i++)
+        {
+            for (int j = first_col; j <= last_col; j++)
+            {
+                double current = std::fabs((data->A)[i][j]);
+                if (current > localMaxVal &&i>=step &&j>=step)
+                {
+                    localMaxVal = current;
+                    localPivotRow = i;
+                    localPivotCol = j;
+
+                }
+            }
+        }
+        
+
+
+        pthread_mutex_lock(&mutex);
+        if (localMaxVal > (*data->globalMaxVal))
+        {
+            (*data->globalMaxVal) = localMaxVal;
+            (*data->globalPivotRow) = localPivotRow;
+            (*data->globalPivotCol) = localPivotCol;
+        }
+
+        pthread_mutex_unlock(&mutex);
+        await(totalThreads);
+        if(myID==0)
+        {
+            //
+            //std::cout<<step<<" "<<(*data->globalMaxVal)<<std::endl;
+            //
+            //
+            //std::cout<<std::endl;
+           // std::cout<<"MAX "<<step<<" "<<(*data->globalMaxVal)<<" "<<(*data->globalPivotRow)<<(*data->globalPivotCol)<<std::endl;
+            //std::cout<<std::endl;
+            //
+            if ((*data->globalMaxVal)< tol){
+                throw std::runtime_error("Matrix is close to singular.");
+                return nullptr;
+            }
+            if ((*data->globalPivotRow) != step) {
+                std::swap((data->A)[step], (data->A)[(*data->globalPivotRow)]);
+                std::swap((data->inv)[step], (data->inv)[(*data->globalPivotRow)]);
+                (*data->globalPivotRow) = step;
+            }
+            if ((*data->globalPivotCol) != step) {
+                for (int i = 0; i < n; ++i) {
+                    std::swap((data->A)[i][step], (data->A)[i][(*data->globalPivotCol)]);
+                }
+                std::swap((data->columnOrder)[step], (data->columnOrder)[(*data->globalPivotCol)]);
+                (*data->globalPivotCol) = step;
+            }
+            ////
+           /* std::cout<<"Matrix after swap"<<std::endl;
+            printMatrix(data->A,n);
+            std::cout<<std::endl;
+            for(int p=0;p<n;p++){
+                for(int q=0;q<n;q++){
+                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
+                }
+                std::cout<<std::endl;
+            }*/
+            ////
+            //Normalize//
+            double pivotVal = (data->A)[step][step]; //Доступ не в свою часть, но строго один
+            for (int j = step; j < n; ++j) {
+                (data->A)[j][step] /= pivotVal;
+            }
+            for (int j = 0; j < n; ++j) {
+                (data->inv)[j][(data->columnOrder)[step]] /= pivotVal;
+            }
+
+            ////
+            /*std::cout<<"Matrix after normilize"<<std::endl;
+            printMatrix(data->A,n);
+            std::cout<<std::endl;
+            for(int p=0;p<n;p++){
+                for(int q=0;q<n;q++){
+                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
+                }
+                std::cout<<std::endl;
+            }*/
+            ////
+        }
+        await(totalThreads);
+        //Eliminate part//
+       /* for (int i = first_row; i <= last_row; ++i) {
+            if (i == step)
+                continue;
+            double factor = (data->A)[i][step];
+            for (int j = step; j < n; ++j) {
+                (data->A)[i][j] -= factor * (data->A)[step][j];
+            }
+            for (int j = 0; j < n; ++j) {
+                (data->inv)[i][(data->columnOrder)[j]] -= factor * (data->inv)[step][(data->columnOrder)[j]];
+            }
+        }
+        */
+       for(int i= first_col; i<=last_col; ++i){// i- номер текущего СТОЛБЦА
+        if(i == step)continue;
+        double factor = (data->A)[step][i];
+        //вычитаем столбцы//
+        for(int j=0; j<n; ++j ){//j--номер СТРОКИ
+            (data->A)[j][i]-=factor*(data->A)[j][step];
+            (data->inv)[j][(data->columnOrder)[i]]-=factor * (data->inv)[j][(data->columnOrder)[step]];
+        }
+       }
+        await(totalThreads);
+        ////
+       /* if(myID==0){std::cout<<"Matrix after eliminate"<<std::endl;
+        printMatrix(data->A,n);
+        std::cout<<std::endl;
+        for(int p=0;p<n;p++){
+                for(int q=0;q<n;q++){
+                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
+                }
+                std::cout<<std::endl;
+            }
+        }*/
+        ////
+
+    }
+    if(myID==0){
+        std::vector<double> undo(n);
+        for(int q=0;q<n;q++){
+            undo[(data->columnOrder)[q]]=q;
+        }
+        for (int i=0;i<n;i++) {
+            for (int j=0;j<n;j++)
+                (data->A)[i][j]=(data->inv)[undo[i]][j];
+        }
+    }
+
+
+    
+    }
+    return 0;
+}
 
 //Возвращаем время если удалось решить и число<0 если не удалось
 double Solve(int n,int totalThreads,std::vector<std::vector<double>>& A,
-    std::vector<std::vector<double>>& inv,std::vector<int> &columnOrder, std::vector<int> &undo){
+    std::vector<std::vector<double>>& inv,std::vector<int> &columnOrder, std::vector<int> &undo, int v=0){
 
     pthread_t threadPool[totalThreads];//массив указателей на потоки
     std::vector<threadData>Data;//массив данных для потоков
@@ -196,7 +362,7 @@ double Solve(int n,int totalThreads,std::vector<std::vector<double>>& A,
     //Create threads
     for (int i = 0; i < totalThreads; i++)
     {
-        Data.emplace_back(n,i,totalThreads,A,inv,columnOrder,&ptr,&ptr1,&ptr2);
+        Data.emplace_back(n,i,totalThreads,A,inv,columnOrder,&ptr,&ptr1,&ptr2,v);
     }
 
     std::chrono::duration<double> elapsed;
