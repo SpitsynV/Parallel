@@ -176,14 +176,11 @@ void* SolveProcess(void *threadArg)
     }
     return 0;
 }
-    if(v==1){//распределение по столбцам, сделать обнуление по строкам( распределение и максимум правильны? только eliminate  переписать)
+    if(v==1){//распределение по столбцам
         int col_per_thread =n/totalThreads;//распределяем
         int remainder = n % totalThreads;//как-то балансируем
         int first_col = myID * col_per_thread + std::min(myID, remainder);
         int last_col = first_col + col_per_thread - 1 + (myID < remainder ? 1 : 0);    
-        ////
-        ////std::cout<<myID<<" "<<first_col<<" "<<last_col<<std::endl;
-        ////
         for (int step = 0; step < n; step++)
     {
         
@@ -229,14 +226,6 @@ void* SolveProcess(void *threadArg)
         await(totalThreads);
         if(myID==0)
         {
-            //
-            //std::cout<<step<<" "<<(*data->globalMaxVal)<<std::endl;
-            //
-            //
-            //std::cout<<std::endl;
-           // std::cout<<"MAX "<<step<<" "<<(*data->globalMaxVal)<<" "<<(*data->globalPivotRow)<<(*data->globalPivotCol)<<std::endl;
-            //std::cout<<std::endl;
-            //
             if ((*data->globalMaxVal)< tol){
                 throw std::runtime_error("Matrix is close to singular.");
                 return nullptr;
@@ -253,17 +242,6 @@ void* SolveProcess(void *threadArg)
                 std::swap((data->columnOrder)[step], (data->columnOrder)[(*data->globalPivotCol)]);
                 (*data->globalPivotCol) = step;
             }
-            ////
-           /* std::cout<<"Matrix after swap"<<std::endl;
-            printMatrix(data->A,n);
-            std::cout<<std::endl;
-            for(int p=0;p<n;p++){
-                for(int q=0;q<n;q++){
-                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
-                }
-                std::cout<<std::endl;
-            }*/
-            ////
             //Normalize//
             double pivotVal = (data->A)[step][step]; //Доступ не в свою часть, но строго один
             for (int j = step; j < n; ++j) {
@@ -273,32 +251,9 @@ void* SolveProcess(void *threadArg)
                 (data->inv)[j][(data->columnOrder)[step]] /= pivotVal;
             }
 
-            ////
-            /*std::cout<<"Matrix after normilize"<<std::endl;
-            printMatrix(data->A,n);
-            std::cout<<std::endl;
-            for(int p=0;p<n;p++){
-                for(int q=0;q<n;q++){
-                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
-                }
-                std::cout<<std::endl;
-            }*/
-            ////
         }
         await(totalThreads);
         //Eliminate part//
-       /* for (int i = first_row; i <= last_row; ++i) {
-            if (i == step)
-                continue;
-            double factor = (data->A)[i][step];
-            for (int j = step; j < n; ++j) {
-                (data->A)[i][j] -= factor * (data->A)[step][j];
-            }
-            for (int j = 0; j < n; ++j) {
-                (data->inv)[i][(data->columnOrder)[j]] -= factor * (data->inv)[step][(data->columnOrder)[j]];
-            }
-        }
-        */
        for(int i= first_col; i<=last_col; ++i){// i- номер текущего СТОЛБЦА
         if(i == step)continue;
         double factor = (data->A)[step][i];
@@ -309,19 +264,6 @@ void* SolveProcess(void *threadArg)
         }
        }
         await(totalThreads);
-        ////
-       /* if(myID==0){std::cout<<"Matrix after eliminate"<<std::endl;
-        printMatrix(data->A,n);
-        std::cout<<std::endl;
-        for(int p=0;p<n;p++){
-                for(int q=0;q<n;q++){
-                    std::cout<<data->inv[p][(data->columnOrder)[q]]<<" ";
-                }
-                std::cout<<std::endl;
-            }
-        }*/
-        ////
-
     }
     if(myID==0){
         std::vector<double> undo(n);

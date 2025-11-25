@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     // time
-    std::cout << "Time to solve: " << time << std::endl;
+    std::cout << "Time to solve: " << time <<" seconds"<< std::endl;
 
 
 
@@ -72,12 +72,32 @@ int main(int argc, char* argv[]) {
     }else{
         initializeMatrix(inv, k, n);
     }
+    
+    /*
     double normError = 0.0;
+    std::chrono::duration<double> elapsed;
+    auto start = std::chrono::high_resolution_clock::now();
+
     normError=getNorm(A,inv);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    elapsed = end - start;
+    auto t=elapsed.count();
+    std::cout<<"Single thread norm time == "<<t<< std::endl;
+    std::cout << "Норма невязки: " << std::scientific << normError << std::endl;
+    */
+
     // results
 
-    std::cout << "Норма невязки: " << std::scientific << normError << std::endl;
-
+   
+   
+    
+    double ans=0;
+    auto t2=Norm(n,totalThreads,A,inv,&ans);
+    ans=sqrt(ans);
+    std::cout << "Параллельная норма невязки: " <<ans<< std::endl;
+    std::cout<< "Multithread norm time: "<<t2<<" seconds"<<std::endl;
+    
     return 0;
 }
 
